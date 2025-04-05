@@ -10,7 +10,7 @@ pip install -r requirements.txt
 <br>
 
 
-## 远程获取点云和视差
+## 远程获取点云和视差客户端
 `stereo_client.py` 是用于端侧获取双目图像对的点云（PLY）以及视差图的程序，可以远程连接部署到GPU服务器的server。
 
 ##### Example usage:
@@ -56,6 +56,11 @@ python stereo_client.py --left 左图像路径 --right 右图像路径 --intrins
 - `cloud.ply`: 生成的点云文件（可使用 MeshLab 等软件查看）
 - `vis.png`: 可视化结果，包含原图和视差图 
 <br>
+
+
+## 点云GIF/Video生成器
+##### 效果示范
+![示例效果](./example/example.gif)
 
 
 ## 图像对比较器
@@ -136,3 +141,4 @@ python stats_visualizer.py --img1 path/to/image1.jpg --img2 path/to/image2.jpg
 结果将保存在指定的输出文件夹中，包括：
 1. 特征匹配可视化图像
 2. Y坐标错位直方图 
+
