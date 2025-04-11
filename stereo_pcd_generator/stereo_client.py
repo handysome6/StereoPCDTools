@@ -7,9 +7,9 @@ from pathlib import Path
 import argparse
 import time
 from loguru import logger
-from Utils import depth2xyzmap, toOpen3dCloud, vis_disparity
 import imageio
 import json
+from .Utils import depth2xyzmap, toOpen3dCloud, vis_disparity
 
 
 def setup_logger(output_dir=None):
@@ -45,9 +45,9 @@ def setup_logger(output_dir=None):
     
     return logger
 
-def process_stereo_images(left_image_path, right_image_path, intrinsic_file, server_url="http://localhost:8000", output_dir=None, scale=1.0):
+def generate_pcd_from_rect_stereo_pair(left_image_path, right_image_path, intrinsic_file, server_url="http://localhost:8000", output_dir=None, scale=1.0):
     """
-    调用立体视觉服务API处理图像对，并在本地生成点云
+    处理矫正后的图像对，调用立体视觉服务API，并在本地生成点云
     
     Args:
         left_image_path: 左图像路径
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    process_stereo_images(
+    generate_pcd_from_rect_stereo_pair(
         args.left,
         args.right,
         args.intrinsic,

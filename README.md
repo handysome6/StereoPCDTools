@@ -15,13 +15,7 @@ pip install -r requirements.txt
 
 ##### Example usage:
 ```
-python stereo_client.py \
-    --left ./example/A_106345528590.jpg \
-    --right ./example/D_106345528590.jpg \
-    --output ./output \
-    --intrinsic ./example/K_477module.txt \
-    --scale 0.35 \
-    --server https://stereo-cfd.andy6.link/
+python -m stereo_pcd_generator.stereo_client --left ./example/A_106345528590.jpg --right ./example/D_106345528590.jpg --output ./output --intrinsic ./example/K_477module.txt --scale 0.35 --server https://stereo-cfd.andy6.link/
 ```
 
 ##### 客户端命令行使用方式：
