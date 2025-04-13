@@ -308,8 +308,21 @@ class StereoPcdGeneratorUI(QMainWindow):
             msg_box.exec()
             
             if msg_box.clickedButton() == open_btn:
+                import platform
                 import subprocess
-                subprocess.run(['open', self.output_path.text()])
+                
+                output_path = self.output_path.text()
+                system = platform.system()
+                
+                try:
+                    if system == 'Darwin':  # macOS
+                        subprocess.run(['open', output_path])
+                    elif system == 'Windows':  # Windows
+                        os.startfile(output_path)
+                    else:  # Linux 或其他系统
+                        subprocess.run(['xdg-open', output_path])
+                except Exception as e:
+                    QMessageBox.warning(self, "警告", f"无法打开输出目录: {str(e)}")
         else:
             self.progress_bar.setFormat("错误")
             QMessageBox.critical(self, "错误", message)
