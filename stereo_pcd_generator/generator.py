@@ -70,9 +70,9 @@ if __name__ == "__main__":
     #     scale=0.35
     # )
     generate_pcd_dir(
-        raw_dir=r"C:\Users\Andy\DCIM\0411_rebar_data\raw",
-        camera_model_path=r"C:\Users\Andy\DCIM\0411_rebar_data\raw\camera_model.json",
-        output_dir=r"C:\Users\Andy\DCIM\0411_rebar_data\pcd_result",
+        raw_dir='/Users/andyliu/Downloads/展台重建',
+        camera_model_path='/Users/andyliu/Downloads/展台重建/camera_model.json',
+        output_dir='/Users/andyliu/Downloads/展台重建/pcd_result',
         scale=0.35
     )
 

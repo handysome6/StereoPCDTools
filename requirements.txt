@@ -7,4 +7,5 @@ imageio>=2.0.0
 matplotlib>=3.4.0
 icecream>=2.0.0
 tqdm>=4.64.0
-dotenv>=0.21.0
+dotenv
+PySide6

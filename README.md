@@ -11,6 +11,8 @@ pip install -r requirements.txt
 
 
 ## 远程获取点云和视差客户端
+使用 `python -m stereo_pcd_generator` 命令打开GUI对一对原始图像进行点云生成(需要相机模型)。
+
 `stereo_client.py` 是用于端侧获取双目图像对的点云（PLY）以及视差图的程序，可以远程连接部署到GPU服务器的server。
 
 ##### Example usage:
