@@ -50,48 +50,83 @@ def adjust_image_coordinates(input_path, output_path, x_offset, y_offset):
     adjusted_img.save(output_path)
 
 
-def adjust_image_pair(left_path, right_path, output_dir):
-    """
-    调整左右图像对的坐标
-    
-    参数:
-        left_path (str): 左图像的路径
-        right_path (str): 右图像的路径
-        output_dir (str): 输出图像的保存路径
-    Returns:
-        left_save_path：矫正后的左图像路径
-        right_save_path：矫正后的右图像路径
-    """
-    left_path = Path(left_path)
-    right_path = Path(right_path)
-    logger.info(f"处理图像对: {left_path.name} - {right_path.name}")
-    assert left_path.exists() and right_path.exists(), f"图像不存在: {left_path} - {right_path}"
-    
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+class AdjustImagePairAuto:
+    def __init__(self, left_path, right_path, output_dir):
+        self.left_path = left_path
+        self.right_path = right_path
+        self.output_dir = output_dir
 
-    
-    analyzer = ImagePairAnalyzer(left_path, right_path, detector_name="AKAZE", matcher="BF")
-    median_diff = analyzer.get_filtered_median(c=0.10)
+    def analyze_y_diff(self):
+        """
+        分析左右图像对的y方向偏差
+        
+        Returns:
+            float: y方向的中值偏差
+            bool: 是否需要调整（偏差是否超过阈值）
+        """
+        left_path = Path(self.left_path)
+        right_path = Path(self.right_path)
+        logger.info(f"分析图像对: {left_path.name} - {right_path.name}")
+        assert left_path.exists() and right_path.exists(), f"图像不存在: {left_path} - {right_path}"
+        
+        analyzer = ImagePairAnalyzer(left_path, right_path, detector_name="AKAZE", matcher="BF")
+        median_diff = analyzer.get_filtered_median(c=0.10)
+        
+        needs_adjustment = abs(median_diff) >= OFFSET_THRESHOLD
+        logger.info(f"y-axis median_diff: {median_diff} {'大于' if needs_adjustment else '小于'}{OFFSET_THRESHOLD}")
+        
+        return median_diff, needs_adjustment
 
-    if abs(median_diff) < OFFSET_THRESHOLD:
-        logger.info(f"median: {median_diff} 小于{OFFSET_THRESHOLD}，符合要求")
-        # just copy the left and right to good
+    def adjust_images(self, y_diff):
+        """
+        根据y方向偏差调整图像对
+        
+        参数:
+            y_diff (float): y方向的偏差值
+            
+        Returns:
+            left_save_path：调整后的左图像路径
+            right_save_path：调整后的右图像路径
+        """
+        left_path = Path(self.left_path)
+        right_path = Path(self.right_path)
+        output_dir = Path(self.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 调整右图像并保存
+        adjust_image_coordinates(right_path, output_dir / right_path.name, 0, -y_diff)
+        # 复制左图像到输出目录
         shutil.copy(left_path, output_dir / left_path.name)
-        shutil.copy(right_path, output_dir / right_path.name)
-    else:
-        logger.info(f"median: {median_diff} 大于{OFFSET_THRESHOLD}，需要进行调整")
-        # adjust the right image and copy to bad
-        adjust_image_coordinates(right_path, output_dir / right_path.name, 0, -median_diff)
-        # copy the left image to the output directory
-        shutil.copy(left_path, output_dir / left_path.name)
 
-    logger.success(f"调整完成： {left_path} - {right_path.name}")
+        logger.success(f"调整完成： {left_path.name} - {right_path.name}")
+        return output_dir / left_path.name, output_dir / right_path.name
 
-    return output_dir / left_path, output_dir / right_path
+    def adjust_image_pair_auto(self):
+        """
+        自动分析并调整左右图像对的坐标
+        
+        Returns:
+            left_save_path：调整后的左图像路径
+            right_save_path：调整后的右图像路径
+        """
+        left_path = Path(self.left_path)
+        right_path = Path(self.right_path)
+        output_dir = Path(self.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        y_diff, needs_adjustment = self.analyze_y_diff()
+        
+        if not needs_adjustment:
+            # 直接复制原始图像
+            shutil.copy(left_path, output_dir / left_path.name)
+            shutil.copy(right_path, output_dir / right_path.name)
+            return output_dir / left_path.name, output_dir / right_path.name
+        else:
+            # 进行调整
+            return self.adjust_images(y_diff)
 
 
-def adjust_image_pairs_dir(input_dir, good_dir, bad_dir):
+def adjust_image_pairs_dir_auto(input_dir, good_dir, bad_dir):
     """
     调整图像文件夹中所有图像的坐标
     
@@ -167,7 +202,7 @@ if __name__ == "__main__":
     #     bad_dir="/home/andy/DCIM/0327_handheld_nuclear/bad")
 
     # image pairs file
-    adjust_image_pair(
+    adjust_image_pair_auto(
         left_path=r"C:\Users\Andy\DCIM\test_rectified\A_326364032379.jpg",
         right_path=r"C:\Users\Andy\DCIM\test_rectified\D_326364032379.jpg",
         output_dir=r"C:\Users\Andy\DCIM\test_rectified\good")

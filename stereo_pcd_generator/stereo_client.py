@@ -12,38 +12,6 @@ import json
 from .Utils import depth2xyzmap, toOpen3dCloud, vis_disparity
 
 
-def setup_logger(output_dir=None):
-    """配置loguru logger"""
-    logger.remove()  # 移除默认处理器
-    
-    # 添加控制台输出
-    logger.add(
-        lambda msg: print(msg, end=""),
-        colorize=True,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
-    )
-    
-    # 如果提供了输出目录，添加文件输出
-    if output_dir:
-        log_file = Path(output_dir) / "stereo_process.log"
-        
-        # 检查并删除现有的日志文件
-        if log_file.exists():
-            try:
-                log_file.unlink()  # 删除现有日志文件
-                logger.info(f"已删除旧的日志文件")
-            except Exception as e:
-                logger.warning(f"无法删除旧的日志文件: {e}")
-        
-        logger.add(
-            str(log_file),
-            rotation="10 MB",
-            retention="1 week",
-            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
-            mode='w'  # 使用写入模式，覆盖任何现有文件
-        )
-    
-    return logger
 
 def generate_pcd_from_rect_stereo_pair(left_image_path, right_image_path, intrinsic_file, server_url="http://localhost:8000", output_dir=None, scale=1.0):
     """
@@ -66,8 +34,6 @@ def generate_pcd_from_rect_stereo_pair(left_image_path, right_image_path, intrin
         output_dir = Path(output_dir)
     output_dir.mkdir(exist_ok=True)
     
-    # 设置日志记录器
-    setup_logger(output_dir)
     
     logger.info(f"开始处理立体图像对: {left_image_path} 和 {right_image_path}")
     logger.info(f"参数设置 - 服务器URL: {server_url}, 输出目录: {output_dir}, 缩放比例: {scale}")

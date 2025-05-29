@@ -5,12 +5,18 @@ import os
 import tempfile
 import matplotlib.pyplot as plt
 import cv2
+from loguru import logger
+from pathlib import Path
+import time
 
 
 class PointCloudAnimator:
     """点云动画生成器类
     
     用于生成点云旋转的GIF或视频，提供统一的接口和参数控制。
+    支持两种旋转模式：
+    1. 相机旋转（默认）：保持点云静止，旋转相机视角
+    2. 物体旋转：保持相机静止，旋转点云物体
     """
     
     def __init__(self, ply_path):
@@ -19,6 +25,7 @@ class PointCloudAnimator:
         Args:
             ply_path (str): 点云文件路径
         """
+        logger.info(f"初始化点云动画生成器，加载点云文件: {ply_path}")
         self.ply_path = ply_path
         self.pcd = o3d.io.read_point_cloud(ply_path)
         
@@ -32,6 +39,7 @@ class PointCloudAnimator:
         self.point_size = 1.0  # 默认点大小
         self.width = 1280  # 默认宽度
         self.height = 720  # 默认高度
+        self.rotation_mode = 'camera'  # 默认旋转模式：'camera' 或 'object'
         
     def set_view_params(self, front=None, lookat=None, up=None, zoom=None, point_size=None):
         """设置视角参数
@@ -53,6 +61,7 @@ class PointCloudAnimator:
             self.zoom_level = zoom
         if point_size is not None:
             self.point_size = point_size
+        logger.debug(f"更新视角参数: front={self.front}, lookat={self.lookat}, up={self.up}, zoom={self.zoom_level}, point_size={self.point_size}")
     
     def set_frame_size(self, width, height):
         """设置输出帧的大小
@@ -63,6 +72,7 @@ class PointCloudAnimator:
         """
         self.width = width
         self.height = height
+        logger.debug(f"设置帧大小: {width}x{height}")
         
     def set_angle_range(self, start_angle, end_angle):
         """设置旋转角度范围
@@ -73,6 +83,18 @@ class PointCloudAnimator:
         """
         self.start_angle = start_angle
         self.end_angle = end_angle
+        logger.debug(f"设置角度范围: {start_angle}° 到 {end_angle}°")
+        
+    def set_rotation_mode(self, mode):
+        """设置旋转模式
+        
+        Args:
+            mode (str): 'camera' 或 'object'
+        """
+        if mode not in ['camera', 'object']:
+            raise ValueError("旋转模式必须是 'camera' 或 'object'")
+        self.rotation_mode = mode
+        logger.info(f"设置旋转模式: {mode}")
         
     def _generate_frames(self, num_frames, axis='horizontal'):
         """生成点云旋转的帧序列
@@ -84,16 +106,20 @@ class PointCloudAnimator:
         Returns:
             list: 帧列表
         """
+        logger.info(f"开始生成帧序列: 帧数={num_frames}, 旋转轴={axis}, 旋转模式={self.rotation_mode}")
         frames = []
         
         # 创建可视化窗口
         vis = o3d.visualization.Visualizer()
         vis.create_window(visible=False, width=self.width, height=self.height)
-        vis.add_geometry(self.pcd)
+        
+        # 创建点云副本用于旋转
+        pcd = o3d.geometry.PointCloud(self.pcd)
+        vis.add_geometry(pcd)
         
         # 设置渲染选项
         render_option = vis.get_render_option()
-        render_option.point_size = self.point_size  # 设置点大小
+        render_option.point_size = self.point_size
         
         # 设置视角
         ctr = vis.get_view_control()
@@ -106,16 +132,39 @@ class PointCloudAnimator:
         total_angle = self.end_angle - self.start_angle
         angle_per_frame = total_angle / (num_frames - 1) if num_frames > 1 else 0
         
-        # 设置初始视角
-        if axis == 'horizontal':
-            ctr.rotate(self.start_angle, 0, 0)
-        else:
-            ctr.rotate(0, self.start_angle, 0)
+        # 设置初始视角或旋转
+        if self.rotation_mode == 'camera':
+            if axis == 'horizontal':
+                ctr.rotate(self.start_angle, 0, 0)
+            else:
+                ctr.rotate(0, self.start_angle, 0)
+        else:  # object rotation
+            if axis == 'horizontal':
+                pcd.rotate(pcd.get_rotation_matrix_from_xyz([0, np.radians(self.start_angle), 0]))
+            else:
+                pcd.rotate(pcd.get_rotation_matrix_from_xyz([0, np.radians(self.start_angle), 0]))
+            vis.update_geometry(pcd)
         
         # 生成帧
         for i in range(num_frames):
-            # 计算当前角度
+            logger.debug(f"生成第 {i+1}/{num_frames} 帧")
             current_angle = self.start_angle + (i * angle_per_frame)
+            
+            if self.rotation_mode == 'camera':
+                # 更新视角
+                if i < num_frames - 1:
+                    if axis == 'horizontal':
+                        ctr.rotate(angle_per_frame, 0, 0)
+                    else:
+                        ctr.rotate(0, angle_per_frame, 0)
+            else:  # object rotation
+                # 更新点云旋转
+                if i < num_frames - 1:
+                    if axis == 'horizontal':
+                        pcd.rotate(pcd.get_rotation_matrix_from_xyz([0, np.radians(angle_per_frame), 0]))
+                    else:
+                        pcd.rotate(pcd.get_rotation_matrix_from_xyz([0, np.radians(angle_per_frame), 0]))
+                    vis.update_geometry(pcd)
             
             # 渲染当前帧
             vis.poll_events()
@@ -126,16 +175,10 @@ class PointCloudAnimator:
             image = np.asarray(image)
             image = (image * 255).astype(np.uint8)
             frames.append(image)
-            
-            # 更新视角（除了最后一帧）
-            if i < num_frames - 1:
-                if axis == 'horizontal':
-                    ctr.rotate(angle_per_frame, 0, 0)
-                else:
-                    ctr.rotate(0, angle_per_frame, 0)
         
         # 清理
         vis.destroy_window()
+        logger.info("帧序列生成完成")
         
         return frames
     
@@ -149,6 +192,9 @@ class PointCloudAnimator:
             loop (int, optional): 循环次数，0表示无限循环
             axis (str, optional): 旋转轴，'horizontal'或'vertical'
         """
+        start_time = time.time()
+        logger.info(f"开始生成GIF: {output_path}")
+        
         frames = self._generate_frames(num_frames, axis)
         
         # 转换为PIL图像
@@ -163,9 +209,11 @@ class PointCloudAnimator:
             loop=loop
         )
         
-        print(f"GIF已保存到: {output_path}")
-        print(f"总帧数: {num_frames}, 每帧时长: {duration}ms, 总时长: {(num_frames * duration)/1000:.2f}秒")
-        print(f"角度范围: 从{self.start_angle}°到{self.end_angle}°, 每帧旋转: {(self.end_angle - self.start_angle)/(num_frames-1 if num_frames > 1 else 1):.2f}°")
+        total_time = time.time() - start_time
+        logger.success(f"GIF生成完成: {output_path}")
+        logger.info(f"总帧数: {num_frames}, 每帧时长: {duration}ms, 总时长: {(num_frames * duration)/1000:.2f}秒")
+        logger.info(f"角度范围: 从{self.start_angle}°到{self.end_angle}°, 每帧旋转: {(self.end_angle - self.start_angle)/(num_frames-1 if num_frames > 1 else 1):.2f}°")
+        logger.info(f"总耗时: {total_time:.2f}秒")
         
     def generate_video(self, output_path, fps=30, duration=None, num_frames=None, axis='horizontal'):
         """生成视频
@@ -177,6 +225,9 @@ class PointCloudAnimator:
             num_frames (int, optional): 指定帧数量，与duration二选一
             axis (str, optional): 旋转轴，'horizontal'或'vertical'
         """
+        start_time = time.time()
+        logger.info(f"开始生成视频: {output_path}")
+        
         # 计算帧数
         if num_frames is None and duration is not None:
             num_frames = int(fps * duration)
@@ -199,9 +250,11 @@ class PointCloudAnimator:
         # 释放资源
         out.release()
         
-        print(f"视频已保存到: {output_path}")
-        print(f"总帧数: {num_frames}, 帧率: {fps}fps, 总时长: {num_frames/fps:.2f}秒")
-        print(f"角度范围: 从{self.start_angle}°到{self.end_angle}°, 每帧旋转: {(self.end_angle - self.start_angle)/(num_frames-1 if num_frames > 1 else 1):.2f}°")
+        total_time = time.time() - start_time
+        logger.success(f"视频生成完成: {output_path}")
+        logger.info(f"总帧数: {num_frames}, 帧率: {fps}fps, 总时长: {num_frames/fps:.2f}秒")
+        logger.info(f"角度范围: 从{self.start_angle}°到{self.end_angle}°, 每帧旋转: {(self.end_angle - self.start_angle)/(num_frames-1 if num_frames > 1 else 1):.2f}°")
+        logger.info(f"总耗时: {total_time:.2f}秒")
 
 
 def generate_point_cloud_gif(ply_path, output_path, num_frames=30, duration=100, **kwargs):
@@ -221,7 +274,10 @@ def generate_point_cloud_gif(ply_path, output_path, num_frames=30, duration=100,
             - height (int): 帧高度
             - loop (int): 循环次数，0表示无限循环
             - axis (str): 旋转轴，'horizontal'或'vertical'
+            - rotation_mode (str): 旋转模式，'camera'或'object'
     """
+    logger.info(f"开始生成点云GIF: {ply_path} -> {output_path}")
+    
     animator = PointCloudAnimator(ply_path)
     
     # 设置自定义参数
@@ -240,6 +296,10 @@ def generate_point_cloud_gif(ply_path, output_path, num_frames=30, duration=100,
     # 设置帧大小
     if 'width' in kwargs and 'height' in kwargs:
         animator.set_frame_size(kwargs['width'], kwargs['height'])
+        
+    # 设置旋转模式
+    if 'rotation_mode' in kwargs:
+        animator.set_rotation_mode(kwargs['rotation_mode'])
     
     animator.generate_gif(output_path, num_frames, duration, 
                          loop=kwargs.get('loop', 0),
@@ -263,7 +323,10 @@ def generate_point_cloud_video(ply_path, output_path, fps=30, duration=10, **kwa
             - height (int): 帧高度
             - num_frames (int): 指定帧数量
             - axis (str): 旋转轴，'horizontal'或'vertical'
+            - rotation_mode (str): 旋转模式，'camera'或'object'
     """
+    logger.info(f"开始生成点云视频: {ply_path} -> {output_path}")
+    
     animator = PointCloudAnimator(ply_path)
     
     # 设置自定义参数
@@ -282,6 +345,10 @@ def generate_point_cloud_video(ply_path, output_path, fps=30, duration=10, **kwa
     # 设置帧大小
     if 'width' in kwargs and 'height' in kwargs:
         animator.set_frame_size(kwargs['width'], kwargs['height'])
+        
+    # 设置旋转模式
+    if 'rotation_mode' in kwargs:
+        animator.set_rotation_mode(kwargs['rotation_mode'])
     
     animator.generate_video(output_path, fps, duration, 
                            num_frames=kwargs.get('num_frames'),
@@ -289,66 +356,71 @@ def generate_point_cloud_video(ply_path, output_path, fps=30, duration=10, **kwa
 
 
 if __name__ == "__main__":
-    ply_path = "/Users/andyliu/workspace/0327_1/105508922583/cloud.ply"
-    zoom = 0.08
-    point_size = 0.6
-    width, hight = 1280, 960
+    # 配置日志
+    # logger.add("pcd_animation_{time}.log", rotation="500 MB")
     
-    # 示例1：使用便捷函数生成GIF (带有小点大小)
+    ply_path = r"C:\Users\Andy\DCIM\demo_video.ply"
+    zoom = 0.8
+    point_size = 0.8
+    width, height = 1920, 1080
+    
+    # # 示例1：使用便捷函数生成GIF (相机旋转模式)
+    # generate_point_cloud_gif(
+    #     ply_path, 
+    #     "output_camera_rotation.gif", 
+    #     num_frames=60,      # 帧数
+    #     duration=50,        # 每帧持续50ms
+    #     start_angle=-90,    # 起始角度
+    #     end_angle=90,       # 结束角度
+    #     zoom=zoom,          # 缩放级别
+    #     point_size=point_size,  # 点大小
+    #     width=width,        # 帧宽度
+    #     height=height,      # 帧高度
+    #     rotation_mode='camera'  # 相机旋转模式
+    # )
+    
+    # 示例2：使用便捷函数生成GIF (物体旋转模式)
     generate_point_cloud_gif(
         ply_path, 
-        "output_basic.gif", 
+        "output_object_rotation.gif", 
         num_frames=60,      # 帧数
-        duration=50,        # 每帧持续50ms
-        start_angle=-90,    # 起始角度
-        end_angle=90,       # 结束角度
-        zoom=zoom,           # 缩放级别
-        point_size=point_size,     # 设置更小的点大小
-        width=width,         # 设置帧宽度为1280
-        height=hight          # 设置帧高度为720
+        duration=100,        # 每帧持续50ms
+        start_angle=0,    # 起始角度
+        end_angle=360,       # 结束角度
+        zoom=zoom,          # 缩放级别
+        point_size=point_size,  # 点大小
+        width=width,        # 帧宽度
+        height=height,      # 帧高度
+        rotation_mode='object'  # 物体旋转模式
     )
     
-    # 示例2：使用便捷函数生成视频 (带有小点大小)
+    # # 示例3：使用便捷函数生成视频 (相机旋转模式)
+    # generate_point_cloud_video(
+    #     ply_path, 
+    #     "output_camera_rotation.mp4", 
+    #     fps=30,             # 帧率
+    #     duration=3,         # 总时长3秒
+    #     start_angle=-90,    # 起始角度
+    #     end_angle=90,       # 结束角度
+    #     zoom=zoom,          # 缩放级别
+    #     point_size=point_size,  # 点大小
+    #     width=width,        # 帧宽度
+    #     height=height,      # 帧高度
+    #     rotation_mode='camera'  # 相机旋转模式
+    # )
+    
+    # 示例4：使用便捷函数生成视频 (物体旋转模式)
     generate_point_cloud_video(
         ply_path, 
-        "output_basic.mp4", 
+        "output_object_rotation.mp4", 
         fps=30,             # 帧率
-        duration=3,         # 总时长3秒
-        start_angle=-90,    # 起始角度
-        end_angle=90,       # 结束角度
-        zoom=zoom,           # 缩放级别
-        point_size=point_size,     # 设置更小的点大小
-        width=width,         # 设置帧宽度为1280
-        height=hight          # 设置帧高度为720
+        duration=15,         # 总时长3秒
+        start_angle=0,    # 起始角度
+        end_angle=360,       # 结束角度
+        zoom=zoom,          # 缩放级别
+        point_size=point_size,  # 点大小
+        width=width,        # 帧宽度
+        height=height,      # 帧高度
+        rotation_mode='object'  # 物体旋转模式
     )
-    
-    # # 示例3：使用类接口进行更多自定义
-    # animator = PointCloudAnimator(ply_path)
-    
-    # # 自定义视角
-    # animator.set_view_params(
-    #     front=[0, 0, -1],
-    #     lookat=[0, 0, 1],
-    #     up=[0, -1, 0],
-    #     zoom=0.15,
-    #     point_size=0.3    # 设置非常小的点大小
-    # )
-    
-    # # 设置旋转范围
-    # animator.set_angle_range(-120, 120)
-    
-    # # 生成垂直方向旋转的GIF
-    # animator.generate_gif(
-    #     "output_vertical.gif",
-    #     num_frames=45,
-    #     duration=80,
-    #     axis='vertical'  # 垂直方向旋转
-    # )
-    
-    # # 生成水平方向旋转的视频
-    # animator.generate_video(
-    #     "output_custom.mp4",
-    #     fps=24,
-    #     num_frames=72  # 指定帧数而不是持续时间
-    # )
         

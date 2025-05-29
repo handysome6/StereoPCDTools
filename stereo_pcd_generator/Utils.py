@@ -11,15 +11,43 @@ import time,logging,importlib
 import open3d as o3d
 import cv2
 import numpy as np
+from loguru import logger
+from pathlib import Path
 
 
+def setup_logger(output_dir=None):
+    """配置loguru logger"""
+    logger.remove()  # 移除默认处理器
+    
+    # 添加控制台输出
+    logger.add(
+        lambda msg: print(msg, end=""),
+        colorize=True,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+    )
+    
+    # 如果提供了输出目录，添加文件输出
+    if output_dir:
+        log_file = Path(output_dir) / "stereo_process.log"
+        
+        # 检查并删除现有的日志文件
+        if log_file.exists():
+            try:
+                log_file.unlink()  # 删除现有日志文件
+                logger.info(f"已删除旧的日志文件")
+            except Exception as e:
+                logger.warning(f"无法删除旧的日志文件: {e}")
+        
+        logger.add(
+            str(log_file),
+            rotation="10 MB",
+            retention="1 week",
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+            mode='w'  # 使用写入模式，覆盖任何现有文件
+        )
+    
+    return logger
 
-def set_logging_format(level=logging.INFO):
-  importlib.reload(logging)
-  FORMAT = '%(message)s'
-  logging.basicConfig(level=level, format=FORMAT, datefmt='%m-%d|%H:%M:%S')
-
-set_logging_format()
 
 
 def toOpen3dCloud(points,colors=None,normals=None):

@@ -4,7 +4,7 @@ import os
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QFileDialog, QGroupBox,
-    QRadioButton, QDoubleSpinBox, QMessageBox, QProgressBar
+    QRadioButton, QDoubleSpinBox, QMessageBox, QProgressBar, QCheckBox
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from .generator import generae_pcd_raw_images, generate_pcd_dir
@@ -134,6 +134,15 @@ class StereoPcdGeneratorUI(QMainWindow):
         
         output_layout.addLayout(scale_layout)
         
+        # y-diff调整开关
+        adjust_layout = QHBoxLayout()
+        self.adjust_checkbox = QCheckBox("使用y-diff调整图像")
+        self.adjust_checkbox.setToolTip("启用后将自动分析并调整图像对的y轴偏差")
+        adjust_layout.addWidget(self.adjust_checkbox)
+        adjust_layout.addStretch()
+        
+        output_layout.addLayout(adjust_layout)
+        
         # 服务器URL设置
         server_layout = QHBoxLayout()
         server_layout.addWidget(QLabel("服务器URL:"))
@@ -249,7 +258,8 @@ class StereoPcdGeneratorUI(QMainWindow):
                 "raw_right_path": right_image,
                 "camera_model_path": camera_model_path,
                 "output_dir": output_path,
-                "scale": scale
+                "scale": scale,
+                "adjust_image": self.adjust_checkbox.isChecked()
             }
             
             # 启动工作线程
@@ -268,7 +278,8 @@ class StereoPcdGeneratorUI(QMainWindow):
                 "raw_dir": dir_path,
                 "camera_model_path": camera_model_path,
                 "output_dir": output_path,
-                "scale": scale
+                "scale": scale,
+                "adjust_image": self.adjust_checkbox.isChecked()
             }
             
             # 启动工作线程
@@ -312,6 +323,7 @@ class StereoPcdGeneratorUI(QMainWindow):
                 import subprocess
                 
                 output_path = self.output_path.text()
+                output_path = str(Path(output_path).absolute())
                 system = platform.system()
                 
                 try:
