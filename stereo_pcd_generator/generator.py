@@ -91,8 +91,11 @@ def generae_pcd_raw_images(
 
 def generate_pcd_dir(raw_dir, camera_model_path, output_dir, scale=0.35, adjust_image=False):
     raw_dir = Path(raw_dir)
-    for left_path in raw_dir.glob("A_*.jpg"):
-        right_path = raw_dir / left_path.name.replace("A_", "D_")
+    # determine the postfix of images (file format)
+    suffix = list(raw_dir.glob("A_*"))[0].suffix
+    logger.info(f"detected image suffix: {suffix}")
+    for left_path in raw_dir.glob(f"A_*{suffix}"):
+        right_path = raw_dir / left_path.name.replace(f"A_", f"D_")
         assert right_path.exists(), f"right image {right_path} not found"
         this_output_dir = Path(output_dir) / left_path.stem
         generae_pcd_raw_images(left_path, right_path, camera_model_path, this_output_dir, scale, adjust_image)

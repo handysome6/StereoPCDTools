@@ -11,6 +11,7 @@ import imageio
 import json
 from .Utils import depth2xyzmap, toOpen3dCloud, vis_disparity
 
+Z_FAR = 10 # 10米
 
 
 def generate_pcd_from_rect_stereo_pair(left_image_path, right_image_path, intrinsic_file, server_url="http://localhost:8000", output_dir=None, scale=1.0):
@@ -168,7 +169,7 @@ def generate_pcd_from_rect_stereo_pair(left_image_path, right_image_path, intrin
     # 第9步：过滤无效点
     logger.info("第9步: 过滤无效点...")
     invalid_mask = ~((np.asarray(pcd.points)[:,2]>0) & 
-                    (np.asarray(pcd.points)[:,2]<=10))  # z_far=10米
+                    (np.asarray(pcd.points)[:,2]<=Z_FAR))  # 过滤z_far米以外的点
     
     points = np.asarray(pcd.points)
     points_count_before = len(points)
